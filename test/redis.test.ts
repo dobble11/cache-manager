@@ -52,7 +52,7 @@ describe('redis store', () => {
             },
           },
         },
-        'ben*': {
+        'benx*': {
           type: 'object',
         },
       },

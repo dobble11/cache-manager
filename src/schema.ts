@@ -1,4 +1,4 @@
-import { isBoolean, isNumber, isObject, isString } from './utils.js';
+import { isBoolean, isNumber, isObject, isString, orderBy, partition, trim } from 'lodash';
 
 type CacheSchemaKeyType = string | RegExp;
 
@@ -20,12 +20,12 @@ export type CacheSchemaArray = {
 
 export type CacheSchema = Record<string, CacheSchemaNode | CacheSchemaObject | CacheSchemaArray>;
 
-function match(keyMatch: CacheSchemaKeyType, key: string): boolean {
-  if (keyMatch instanceof RegExp) {
-    return keyMatch.test(key);
-  }
-  return keyMatch === key;
-}
+type CacheSchemaMap = Map<
+  CacheSchemaKeyType,
+  | CacheSchemaNode
+  | (Omit<CacheSchemaObject, 'properties'> & { properties?: CacheSchemaMap })
+  | CacheSchemaArray
+>;
 
 const typeCheckerMap: Record<string, Function> = {
   string: isString,
@@ -38,11 +38,22 @@ const typeCheckerMap: Record<string, Function> = {
 export function transformSchema(node: any) {
   if (node !== null && typeof node === 'object') {
     if (node.type === 'object' && node.properties) {
-      Object.keys(node.properties).forEach((key) => {
+      const keys = Object.keys(node.properties);
+      const [wildcardKeys, normalKeys] = partition(keys, (key) => key.includes('*'));
+      const orderedKeys = [
+        ...normalKeys,
+        ...orderBy(wildcardKeys, (key) => trim(key, '*').length, ['desc']),
+      ];
+
+      node.properties = orderedKeys.reduce((acc, key) => {
         const value = node.properties[key];
-        value.keyMatch = key.includes('*') ? new RegExp(key.replace(/\*/g, '.*')) : key;
-        transformSchema(value);
-      });
+
+        acc.set(
+          key.includes('*') ? new RegExp(key.replace(/\*/g, '.*')) : key,
+          transformSchema(value),
+        );
+        return acc;
+      }, new Map());
     }
 
     return node;
@@ -52,16 +63,21 @@ export function transformSchema(node: any) {
 }
 
 export const vaildateCache = (
-  ruleMap: any,
+  ruleMap: CacheSchemaMap,
   key: string,
   value: any,
   path?: string,
   ttl?: number,
 ) => {
   const currentPath = path ? `${path}.${key}` : key;
-  const rule: any = Object.values(ruleMap).find((rule: any) => {
-    return match(rule.keyMatch, key);
-  });
+  let rule = ruleMap.get(key);
+
+  for (const [key, value] of ruleMap) {
+    if (key instanceof RegExp && key.test(currentPath)) {
+      rule = value;
+      break;
+    }
+  }
 
   if (!rule) {
     throw new Error(`No match schema for key ${currentPath}`);
@@ -69,7 +85,7 @@ export const vaildateCache = (
   if (ttl && rule.maxTTL && ttl > rule.maxTTL) {
     throw new Error(`ttl for key ${currentPath} is greater than max ttl`);
   }
-  const checker = typeCheckerMap[rule.type];
+  const checker = typeCheckerMap[rule.type || ''];
 
   if (!checker) {
     return;
@@ -78,8 +94,8 @@ export const vaildateCache = (
     throw new Error(`value for key ${currentPath} is not ${rule.type}`);
   }
   if (rule.type === 'object' && rule.properties) {
-    Object.keys(value as Record<string, any>).forEach((key) => {
-      vaildateCache(rule.properties, key, value[key], currentPath, ttl);
+    Object.keys(value).forEach((key) => {
+      vaildateCache(rule.properties!, key, value[key], currentPath, ttl);
     });
   }
 };

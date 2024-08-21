@@ -1,5 +1,6 @@
 import { type CacheSchema, transformSchema, vaildateCache } from './schema.js';
-import { isString, parse, stringify } from './utils.js';
+import { parse, stringify } from './utils.js';
+import { isString } from 'lodash';
 
 export type Options = {
   ttl?: Seconds;
