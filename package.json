@@ -1,0 +1,45 @@
+{
+  "name": "cache-manager",
+  "version": "0.0.0-beta.1",
+  "type": "module",
+  "description": "cache manager",
+  "packageManager": "pnpm@8.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    "./stores/*": {
+      "require": "./dist/stores/*"
+    }
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "build": "rimraf dist && tsc",
+    "publish:beta": "npm run build && npm publish --tag beta",
+    "publish:latest": "npm run build && npm publish"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "lru-cache": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/ioredis": "4.28.10",
+    "@types/node": "^20.3.2",
+    "ioredis": "4.23.0",
+    "rimraf": "^5.0.7",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2",
+    "vitest": "^2.0.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
