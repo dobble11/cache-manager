@@ -25,7 +25,7 @@ export function redisStore(options: RedisStoreOptions) {
     async set(key, value: string, ttl) {
       const t = ttl === undefined ? options?.ttl : ttl;
 
-      if (ttl !== undefined && t !== 0) {
+      if (t !== undefined && t !== 0) {
         await client.set(key, value, 'EX', t);
       } else {
         await client.set(key, value);
