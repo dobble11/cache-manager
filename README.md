@@ -200,7 +200,7 @@ function createSessionCache(options) {
   client.set = function (args, cb) {
     if (Array.isArray(args)) {
       // schema 验证依赖对象 value
-      vaildateCacheSlient(...args);
+      vaildateCacheSilent(...args);
 
       try {
         // 由于 connect-redis 会处理将 set 值 JSON.stringify，所以需要将序列化下放到 redisCilent 内部

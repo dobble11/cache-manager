@@ -1,4 +1,4 @@
-import { describe, test, vi, afterEach, expect } from 'vitest';
+import { describe, test, vi, afterEach, expect, afterAll } from 'vitest';
 import Redis from 'ioredis';
 import { redisStore } from '../src/stores/ioredis.js';
 import { createCache } from '../src/cache.js';
@@ -6,6 +6,10 @@ import { createCache } from '../src/cache.js';
 const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 describe('redis store', () => {
+  afterAll(() => {
+    redisClient.disconnect();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
