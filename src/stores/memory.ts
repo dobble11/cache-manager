@@ -53,6 +53,9 @@ export function memoryStore(options?: MemoryOptions): MemoryStore {
       lruCache.clear();
     },
     ttl: async (key) => lruCache.getRemainingTTL(key) / 1000,
+    async exists(key) {
+      return lruCache.has(key) ? 1 : 0;
+    },
     async set(key, value, opt) {
       const ttl = opt ?? lruOptions.ttl;
 

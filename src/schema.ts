@@ -62,6 +62,13 @@ export function transformSchema(node: any) {
   return node;
 }
 
+export class CacheSchemaValidatorError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CacheSchemaValidatorError';
+  }
+}
+
 export const vaildateCache = (
   ruleMap: CacheSchemaMap,
   key: string,
@@ -69,21 +76,22 @@ export const vaildateCache = (
   path?: string,
   ttl?: number,
 ) => {
-  const currentPath = path ? `${path}.${key}` : key;
   let rule = ruleMap.get(key);
-
-  for (const [key, value] of ruleMap) {
-    if (key instanceof RegExp && key.test(currentPath)) {
-      rule = value;
-      break;
+  if (!rule) {
+    for (const [matchKey, value] of ruleMap) {
+      if (matchKey instanceof RegExp && matchKey.test(key)) {
+        rule = value;
+        break;
+      }
     }
   }
 
+  const currentPath = path ? `${path}.${key}` : key;
   if (!rule) {
-    throw new Error(`No match schema for key ${currentPath}`);
+    throw new CacheSchemaValidatorError(`No match schema for key ${currentPath}`);
   }
   if (ttl && rule.maxTTL && ttl > rule.maxTTL) {
-    throw new Error(`ttl for key ${currentPath} is greater than max ttl`);
+    throw new CacheSchemaValidatorError(`ttl for key ${currentPath} is greater than max ttl`);
   }
   const checker = typeCheckerMap[rule.type || ''];
 
@@ -91,7 +99,7 @@ export const vaildateCache = (
     return;
   }
   if (!checker(value)) {
-    throw new Error(`value for key ${currentPath} is not ${rule.type}`);
+    throw new CacheSchemaValidatorError(`value for key ${currentPath} is not ${rule.type}`);
   }
   if (rule.type === 'object' && rule.properties) {
     Object.keys(value).forEach((key) => {

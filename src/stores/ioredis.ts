@@ -1,19 +1,16 @@
 import type { Cluster, Redis } from 'ioredis';
 import type { Store, Options } from '../cache.js';
 
-export interface RedisStore extends Store {
-  on: RedisClient['on'];
-  off: RedisClient['off'];
-}
+export interface RedisStore extends Store {}
 
 type RedisClient = Redis | Cluster;
 
-interface RedisStoreOptions extends Omit<Options, 'schema' | 'hooks' | 'suffix'> {
+interface RedisStoreOptions extends Pick<Options, 'ttl'> {
   client: RedisClient;
 }
 
 export function redisStore(options: RedisStoreOptions) {
-  const { client } = options;
+  const { client, ttl: defaultTTL } = options;
   const reset = async () => {
     await client.flushdb();
   };
@@ -22,14 +19,19 @@ export function redisStore(options: RedisStoreOptions) {
     get(key: string) {
       return client.get(key);
     },
-    async set(key, value: string, ttl) {
-      const t = ttl === undefined ? options?.ttl : ttl;
+    async set(key, value: string, ttl, options) {
+      const t = ttl === undefined ? defaultTTL : ttl;
+      const args: unknown[] = [key, value];
 
-      if (t !== undefined && t !== 0) {
-        await client.set(key, value, 'EX', t);
-      } else {
-        await client.set(key, value);
+      if (options?.NX) {
+        args.push('NX');
       }
+      if (t !== undefined && t !== 0) {
+        args.push('EX', t);
+      }
+
+      // @ts-ignore
+      await client.set(...args);
     },
     async mset(args, ttl) {
       const t = ttl === undefined ? options?.ttl : ttl;
@@ -57,7 +59,5 @@ export function redisStore(options: RedisStoreOptions) {
     keys: (pattern = '*') => client.keys(pattern),
     exists: (key: string) => client.exists(key),
     reset,
-    on: client.on.bind(client),
-    off: client.off.bind(client),
   } as RedisStore;
 }

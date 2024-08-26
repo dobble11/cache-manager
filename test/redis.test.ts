@@ -1,7 +1,7 @@
 import { describe, test, vi, afterEach, expect } from 'vitest';
-import { createCache } from '../src/cache.js';
-import { redisStore } from '../src/stores/ioredis.js';
 import Redis from 'ioredis';
+import { redisStore } from '../src/stores/ioredis.js';
+import { createCache } from '../src/cache.js';
 
 const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
@@ -18,7 +18,12 @@ describe('redis store', () => {
     await cache.set('ab', { a: 1, c: 2 }, 60);
 
     await expect(cache.get('ab')).resolves.toEqual({ a: 1, c: 2 });
-    await expect(redisClient.get('ab_test')).resolves.toEqual('{"a":1,"c":2}');
+    await expect(cache.get('ab', { parse: false })).resolves.toEqual(
+      JSON.stringify({ a: 1, c: 2 }),
+    );
+
+    await cache.set('ab', 11, 60, { NX: true });
+    await expect(redisClient.get('ab_test')).resolves.toEqual(JSON.stringify({ a: 1, c: 2 }));
   });
 
   test('set beforeOperation hook', async () => {
@@ -86,5 +91,37 @@ describe('redis store', () => {
 
     await expect(cache.set('anytype', 1)).resolves.toBeUndefined();
     await expect(cache.set('anytype', { x: 1 })).resolves.toBeUndefined();
+  });
+
+  test('set with gzip', async () => {
+    const cache = createCache(redisStore, {
+      client: redisClient,
+    });
+    const fn = vi.fn();
+
+    cache.on('compress', fn);
+
+    const str = 'aaaaaaaabbbbbbbbbcccccccddddddddsssssssssssssssssssssssssssssss';
+    await cache.set('gzipbar', str, 60, {
+      gzip: true,
+    });
+
+    await expect(redisClient.get('gzipbar')).resolves.toMatch(/^_gzip_/);
+    await expect(cache.get('gzipbar')).resolves.toEqual(str);
+    expect(fn).toHaveBeenCalledWith({
+      key: 'gzipbar',
+      value: '_gzip_H4sIAAAAAAAAE1NKhIIkGEiGgBQoKMYPlAB70jLNQQAAAA==',
+      hasSzip: true,
+    });
+  });
+
+  test('set NX flag', async () => {
+    const cache = createCache(redisStore, {
+      client: redisClient,
+    });
+
+    await cache.set('nxbar', '1', 60, { NX: true });
+    await cache.set('nxbar', '2', 60, { NX: true });
+    await expect(cache.get('nxbar')).resolves.toEqual('1');
   });
 });
