@@ -8,6 +8,7 @@ import {
 import { parse, stringify } from './utils.js';
 import { isString, trimStart } from 'lodash';
 import zlib from 'node:zlib';
+import type { Cluster, Redis } from 'ioredis';
 
 export type Options = {
   ttl?: Seconds;
@@ -191,6 +192,55 @@ export function createCache<S extends Store, O extends Options>(
       return store.exists(`${key}${suffix}`);
     },
     reset: () => store.reset(),
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+  };
+}
+
+export function createSessionCache(
+  options: Pick<Options, 'hooks' | 'schema'> & { client: Redis | Cluster },
+) {
+  const { schema, hooks, client } = options;
+  const beforeOperation = hooks?.beforeOperation;
+  const ruleMap = schema
+    ? transformSchema({
+        type: 'object',
+        properties: schema,
+      }).properties
+    : undefined;
+  const emitter = new EventEmitter<Pick<EventMap, 'error'>>();
+  const vaildateCacheSilent = (key: string, value: any, path?: string, ttl?: number) => {
+    if (ruleMap) {
+      try {
+        vaildateCache(ruleMap, key, value, path, ttl);
+      } catch (error) {
+        emitter.emit('error', error as CacheSchemaValidatorError);
+      }
+    }
+  };
+
+  const _set = client.set;
+
+  client.set = function (args, cb) {
+    if (Array.isArray(args)) {
+      // @ts-ignore
+      vaildateCacheSilent(...args);
+
+      try {
+        args[1] = JSON.stringify(args[1]);
+      } catch (error) {
+        // @ts-ignore
+        return cb(error);
+      }
+      beforeOperation?.('set', ...args);
+    }
+
+    // @ts-ignore
+    return _set.call(client, args, cb);
+  };
+
+  return {
+    client,
     on: emitter.on.bind(emitter),
     off: emitter.off.bind(emitter),
   };

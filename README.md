@@ -1,5 +1,7 @@
 # cache-manager
 
+实现统一的缓存管理与监控
+
 ## 可选方案
 
 - [node-cache](https://github.com/node-cache/node-cache)：仅支持内存缓存，基本不维护
