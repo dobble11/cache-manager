@@ -8,7 +8,7 @@
   "types": "dist/index.d.ts",
   "exports": {
     "./stores/*": {
-      "require": "./dist/stores/*"
+      "import": "./dist/stores/*"
     }
   },
   "scripts": {
@@ -28,14 +28,13 @@
     "access": "public"
   },
   "dependencies": {
+    "ioredis": "^5.4.1",
     "lodash": "^4.17.21",
     "lru-cache": "^11.0.0"
   },
   "devDependencies": {
-    "@types/ioredis": "4.28.10",
     "@types/lodash": "^4.17.7",
     "@types/node": "^20.3.2",
-    "ioredis": "4.23.0",
     "rimraf": "^5.0.7",
     "typescript": "^5.5.4",
     "vite": "^5.4.2",

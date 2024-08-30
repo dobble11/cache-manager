@@ -1,6 +1,6 @@
 # cache-manager
 
-实现统一的缓存管理与监控
+实现统一的缓存使用管理与监控
 
 ## 可选方案
 
@@ -15,7 +15,7 @@
 
 ```ts
 import { createCache } from 'cache-manager';
-import memoryStore from 'cache-manager/stores/memoryStore';
+import memoryStore from 'cache-manager/stores/memory';
 
 // 内存缓存
 const cache = createCache(memoryStore, {
@@ -50,8 +50,8 @@ await cache.del('foo');
 const cache = createCache(store, {
   hooks: {
     // operation：get、set、del...
-    // args：调用方法入参，value 为最终存储的值
-    beforeOperation(operation, ...args) {
+    // 其它为调用方法入参，value 为最终存储的值
+    beforeOperation({ operation, key, value, rawValue, ttl }) {
       // 上报
     },
   },
@@ -149,15 +149,10 @@ import { createSessionCache } from 'cache-manager';
 
 const cache = createSessionCache({
   schema: {
-    'sess:*': {
+    user: {
       type: 'object',
-      properties: {
-        user: {
-          type: 'object',
-        },
-        // ...其它属性
-      },
     },
+    // ...其它属性
   },
   hooks: {
     beforeOperation(operation, ...args) {

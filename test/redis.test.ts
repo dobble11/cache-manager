@@ -1,5 +1,5 @@
 import { describe, test, vi, afterEach, expect, afterAll } from 'vitest';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { redisStore } from '../src/stores/ioredis.js';
 import { createCache } from '../src/cache.js';
 
@@ -38,9 +38,16 @@ describe('redis store', () => {
         beforeOperation,
       },
     });
+    const value = { a: 1, c: 2 };
 
-    await cache.set('ab', { a: 1, c: 2 }, 60);
-    expect(beforeOperation).toHaveBeenCalledWith('set', 'ab', JSON.stringify({ a: 1, c: 2 }), 60);
+    await cache.set('ab', value, 60);
+    expect(beforeOperation).toHaveBeenCalledWith({
+      key: 'ab',
+      operation: 'set',
+      rawValue: value,
+      ttl: 60,
+      value: JSON.stringify(value),
+    });
   });
 
   test('schema validation', async () => {

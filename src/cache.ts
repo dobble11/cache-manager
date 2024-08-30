@@ -10,13 +10,21 @@ import { isString, trimStart } from 'lodash';
 import zlib from 'node:zlib';
 import type { Cluster, Redis } from 'ioredis';
 
+export interface OperationHookData {
+  operation: string;
+  key: string;
+  value?: string;
+  rawValue?: unknown;
+  ttl?: number;
+}
+
 export type Options = {
   ttl?: Seconds;
   gzip?: boolean;
   suffix?: string;
   schema?: CacheSchema;
   hooks?: {
-    beforeOperation?: (operation: string, ...args: any[]) => void;
+    beforeOperation?: (data: OperationHookData) => void;
   };
 };
 
@@ -94,11 +102,11 @@ export function createCache<S extends Store, O extends Options>(
   return {
     store,
     del: async (key: string) => {
-      beforeOperation?.('del', key);
+      beforeOperation?.({ operation: 'del', key });
       return store.del(`${key}${suffix}`);
     },
     get: async <T>(key: string, options: Parameters<Store['get']>['1']) => {
-      beforeOperation?.('get', key);
+      beforeOperation?.({ operation: 'get', key });
       let val = await store.get<string>(`${key}${suffix}`);
       const { parse: enableParse = true } = options || {};
 
@@ -141,11 +149,11 @@ export function createCache<S extends Store, O extends Options>(
         emitter.emit('compress', { key, hasSzip, value: str });
       }
 
-      beforeOperation?.('set', key, str, ttl);
+      beforeOperation?.({ operation: 'set', key, value: str, rawValue: value, ttl });
       return store.set(`${key}${suffix}`, str, ttl, options);
     },
     ttl: (key: string) => {
-      beforeOperation?.('ttl', key);
+      beforeOperation?.({ operation: 'ttl', key });
       return store.ttl(`${key}${suffix}`);
     },
     mset: (args: [string, unknown][], ttl?: Seconds) => {
@@ -157,15 +165,9 @@ export function createCache<S extends Store, O extends Options>(
         ([key, value]) => [`${key}${suffix}`, stringify(value)] as [string, unknown],
       );
 
-      beforeOperation?.(
-        'mset',
-        args.map((m, index) => [m[0], newArgs[index][1]]),
-        ttl,
-      );
       return store.mset(newArgs, ttl);
     },
     mget: async (...args: string[]) => {
-      beforeOperation?.('mget', ...args);
       const newArgs = args.map((key) => `${key}${suffix}`);
       const list = await store.mget(...newArgs);
 
@@ -184,11 +186,10 @@ export function createCache<S extends Store, O extends Options>(
       });
     },
     mdel: (...args: string[]) => {
-      beforeOperation?.('mdel', ...args);
       return store.mdel(...args.map((key) => `${key}${suffix}`));
     },
     exists: (key) => {
-      beforeOperation?.('exists', key);
+      beforeOperation?.({ operation: 'exists', key });
       return store.exists(`${key}${suffix}`);
     },
     reset: () => store.reset(),
@@ -198,14 +199,19 @@ export function createCache<S extends Store, O extends Options>(
 }
 
 export function createSessionCache(
-  options: Pick<Options, 'hooks' | 'schema'> & { client: Redis | Cluster },
+  options: Pick<Options, 'hooks' | 'schema'> & { client: Redis | Cluster; prefix?: string },
 ) {
-  const { schema, hooks, client } = options;
+  const { schema, hooks, client, prefix = 'sess:' } = options;
   const beforeOperation = hooks?.beforeOperation;
   const ruleMap = schema
     ? transformSchema({
         type: 'object',
-        properties: schema,
+        properties: {
+          [`${prefix}*`]: {
+            type: 'object',
+            properties: schema,
+          },
+        },
       }).properties
     : undefined;
   const emitter = new EventEmitter<Pick<EventMap, 'error'>>();
@@ -224,7 +230,8 @@ export function createSessionCache(
   client.set = function (args, cb) {
     if (Array.isArray(args)) {
       // @ts-ignore
-      vaildateCacheSilent(...args);
+      vaildateCacheSilent(args[0], args[1], '', args[3]);
+      const rawValue = args[1];
 
       try {
         args[1] = JSON.stringify(args[1]);
@@ -232,7 +239,7 @@ export function createSessionCache(
         // @ts-ignore
         return cb(error);
       }
-      beforeOperation?.('set', ...args);
+      beforeOperation?.({ operation: 'set', key: args[0], value: args[1], rawValue, ttl: args[3] });
     }
 
     // @ts-ignore
