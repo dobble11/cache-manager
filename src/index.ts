@@ -1,2 +1,2 @@
 export * from './cache.js';
-export { CacheSchemaValidatorError } from './schema.js';
+export * from './schema.js';

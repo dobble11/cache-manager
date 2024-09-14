@@ -4,7 +4,7 @@ export const parse = (value: string): [Error | undefined, unknown] => {
 
     return [undefined, result];
   } catch (error) {
-    return [error as Error, value];
+    return [error as Error, undefined];
   }
 };
 

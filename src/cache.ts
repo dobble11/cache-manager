@@ -49,7 +49,7 @@ export type Store = {
 };
 
 interface EventMap {
-  compress: [context: { key: string; hasSzip: boolean; value: string }];
+  compress: [context: { key: string; hasGzip: boolean; value: string }];
   error:
     | [err: Error, context: { key: string; value: unknown; operation: string }]
     | [err: CacheSchemaValidatorError];
@@ -101,16 +101,23 @@ export function createCache<S extends Store, O extends Options>(
 
   return {
     store,
-    del: async (key: string) => {
+    del: (key: string) => {
       beforeOperation?.({ operation: 'del', key });
       return store.del(`${key}${suffix}`);
     },
     get: async <T>(key: string, options: Parameters<Store['get']>['1']) => {
-      beforeOperation?.({ operation: 'get', key });
       let val = await store.get<string>(`${key}${suffix}`);
+      const triggerBeforeOperation = (value: unknown) => {
+        beforeOperation?.({
+          operation: 'get',
+          key,
+          rawValue: value,
+        });
+      };
       const { parse: enableParse = true } = options || {};
 
       if (!enableParse) {
+        triggerBeforeOperation(val);
         return val;
       }
       if (isString(val) && val.startsWith(GZIP_FLAG)) {
@@ -122,10 +129,11 @@ export function createCache<S extends Store, O extends Options>(
       if (err) {
         emitter.emit('error', err, {
           key: `${key}${suffix}`,
-          value,
+          value: val,
           operation: 'get',
         });
       }
+      triggerBeforeOperation(value);
 
       return value as T;
     },
@@ -138,15 +146,15 @@ export function createCache<S extends Store, O extends Options>(
       if (gzip) {
         const buffer = zlib.gzipSync(str);
         const gzipStr = `${GZIP_FLAG}${buffer.toString('base64')}`;
-        let hasSzip = false;
+        let hasGzip = false;
 
         if (str.length > gzipStr.length) {
           // 压缩后更小
           str = gzipStr;
-          hasSzip = true;
+          hasGzip = true;
         }
         // 触发压缩事件
-        emitter.emit('compress', { key, hasSzip, value: str });
+        emitter.emit('compress', { key, hasGzip, value: str });
       }
 
       beforeOperation?.({ operation: 'set', key, value: str, rawValue: value, ttl });
@@ -161,26 +169,40 @@ export function createCache<S extends Store, O extends Options>(
         vaildateCacheSilent(key, value, '', ttl);
       }
 
-      const newArgs = args.map(
-        ([key, value]) => [`${key}${suffix}`, stringify(value)] as [string, unknown],
-      );
+      const newArgs = args.map(([key, value]) => {
+        const str = stringify(value);
+        beforeOperation?.({
+          operation: 'set',
+          key,
+          rawValue: value,
+          value: str,
+        });
+
+        return [`${key}${suffix}`, str] as [string, string];
+      });
 
       return store.mset(newArgs, ttl);
     },
     mget: async (...args: string[]) => {
-      const newArgs = args.map((key) => `${key}${suffix}`);
-      const list = await store.mget(...newArgs);
+      const newKeys = args.map((key) => `${key}${suffix}`);
+      const list = await store.mget(...newKeys);
 
       return list.map((val, index) => {
         const [err, value] = parse(val as string);
 
         if (err) {
           emitter.emit('error', err, {
-            key: newArgs[index],
+            key: newKeys[index],
             value,
             operation: 'mget',
           });
         }
+
+        beforeOperation?.({
+          operation: 'get',
+          key: newKeys[index],
+          rawValue: value,
+        });
 
         return value;
       });

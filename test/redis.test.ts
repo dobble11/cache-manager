@@ -122,7 +122,7 @@ describe('redis store', () => {
     expect(fn).toHaveBeenCalledWith({
       key: 'gzipbar',
       value: '_gzip_H4sIAAAAAAAAE1NKhIIkGEiGgBQoKMYPlAB70jLNQQAAAA==',
-      hasSzip: true,
+      hasGzip: true,
     });
   });
 

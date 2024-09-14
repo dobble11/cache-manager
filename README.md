@@ -72,7 +72,7 @@ cache.on('error', (err: CacheSchemaValidatorError) => {
 });
 
 // 压缩事件
-cache.on('compress', (context: { key: string; hasSzip: boolean; value: any }) => {
+cache.on('compress', (context: { key: string; hasGzip: boolean; value: any }) => {
   // 压缩率上报
 });
 
@@ -89,15 +89,15 @@ function set(key: string, value: any, ttl?: number, { gzip = false }) {
   if (gzip) {
     const buffer = zlib.gzipSync(str);
     const gzipStr = `_gzip_${buffer.toString('base64')}`;
-    const hasSzip = false;
+    const hasGzip = false;
 
     if (str.length > gzipStr.length) {
       // 压缩后更小
       str = gzipStr;
-      hasSzip = true;
+      hasGzip = true;
     }
     // 触发压缩事件
-    emitter.emit('compress', { key, hasSzip, value: str });
+    emitter.emit('compress', { key, hasGzip, value: str });
   }
 
   store.set(key, str, ttl);
